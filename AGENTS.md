@@ -1,65 +1,211 @@
-# 项目上下文
+# Voice Cloning TTS - 项目文档
 
-### 版本技术栈
+## 项目概述
 
-- **Framework**: Next.js 16 (App Router)
-- **Core**: React 19
-- **Language**: TypeScript 5
-- **UI 组件**: shadcn/ui (基于 Radix UI)
-- **Styling**: Tailwind CSS 4
+基于 Qwen3-TTS-1.7B 的声音克隆网页应用，支持：
+- 上传参考音频克隆音色
+- 文本转语音合成
+- 音色保存与管理
+- 语速调节
+
+## 技术架构
+
+### 前端 (Next.js)
+- 端口: 5000
+- 技术栈: React 19, TypeScript, Tailwind CSS, shadcn/ui
+- 功能: 音频上传、文本输入、实时播放、下载
+
+### 后端 (Python FastAPI)
+- 端口: 5001
+- 技术栈: FastAPI, NumPy, scipy
+- 模型: Qwen3-TTS-12Hz-1.7B-Base (ModelScope)
+- 特性: Demo 模式（无需完整模型即可运行）
 
 ## 目录结构
 
 ```
-├── public/                 # 静态资源
-├── scripts/                # 构建与启动脚本
-│   ├── build.sh            # 构建脚本
-│   ├── dev.sh              # 开发环境启动脚本
-│   ├── prepare.sh          # 预处理脚本
-│   └── start.sh            # 生产环境启动脚本
+.
+├── backend/
+│   ├── app.py              # FastAPI 应用主文件
+│   ├── requirements.txt    # Python 依赖
+│   ├── download_model.py   # 模型下载脚本
+│   └── setup.sh           # 安装脚本
 ├── src/
-│   ├── app/                # 页面路由与布局
-│   ├── components/ui/      # Shadcn UI 组件库
-│   ├── hooks/              # 自定义 Hooks
-│   ├── lib/                # 工具库
-│   │   └── utils.ts        # 通用工具函数 (cn)
-│   └── server.ts           # 自定义服务端入口
-├── next.config.ts          # Next.js 配置
-├── package.json            # 项目依赖管理
-└── tsconfig.json           # TypeScript 配置
+│   ├── app/
+│   │   ├── page.tsx       # 主页面
+│   │   └── layout.tsx     # 布局
+│   ├── components/
+│   │   └── VoiceCloneApp.tsx  # 主要功能组件
+│   └── lib/
+│       └── api.ts         # API 服务层
+├── scripts/
+│   └── start-voice-tts.sh # 组合启动脚本
+└── .env.local             # 环境变量
 ```
 
-- 项目文件（如 app 目录、pages 目录、components 等）默认初始化到 `src/` 目录下。
+## 启动方式
 
-## 包管理规范
+### 方式1: 使用启动脚本（推荐）
+```bash
+cd /workspace/projects
+bash scripts/start-voice-tts.sh
+```
 
-**仅允许使用 pnpm** 作为包管理器，**严禁使用 npm 或 yarn**。
-**常用命令**：
-- 安装依赖：`pnpm add <package>`
-- 安装开发依赖：`pnpm add -D <package>`
-- 安装所有依赖：`pnpm install`
-- 移除依赖：`pnpm remove <package>`
+### 方式2: 手动启动
+```bash
+# 终端1: 启动 Python 后端
+cd /workspace/projects/backend
+python3 -m uvicorn app:app --host 0.0.0.0 --port 5001
 
-## 开发规范
+# 终端2: 启动 Next.js 前端
+cd /workspace/projects
+pnpm dev
+```
 
-### 编码规范
+### 方式3: 仅前端 + Demo 模式
+```bash
+# Demo 模式会自动生成示例音频，无需完整模型
+cd /workspace/projects
+pnpm dev
+```
 
-- 默认按 TypeScript `strict` 心智写代码；优先复用当前作用域已声明的变量、函数、类型和导入，禁止引用未声明标识符或拼错变量名。
-- 禁止隐式 `any` 和 `as any`；函数参数、返回值、解构项、事件对象、`catch` 错误在使用前应有明确类型或先完成类型收窄，并清理未使用的变量和导入。
+## API 接口
 
-### next.config 配置规范
+### 健康检查
+```
+GET /health
+```
 
-- 配置的路径不要写死绝对路径，必须使用 path.resolve(__dirname, ...)、import.meta.dirname 或 process.cwd() 动态拼接。
+### 声音克隆 + 合成
+```
+POST /api/tts/clone
+Content-Type: multipart/form-data
 
-### Hydration 问题防范
+参数:
+- text: string (必填) - 要转换的文本
+- audio: file (必填) - 参考音频文件
+- speed: float (可选, 默认1.0) - 语速 0.5-2.0
 
-1. 严禁在 JSX 渲染逻辑中直接使用 typeof window、Date.now()、Math.random() 等动态数据。**必须使用 'use client' 并配合 useEffect + useState 确保动态内容仅在客户端挂载后渲染**；同时严禁非法 HTML 嵌套（如 <p> 嵌套 <div>）。
-2. **禁止使用 head 标签**，优先使用 metadata，详见文档：https://nextjs.org/docs/app/api-reference/functions/generate-metadata
-   1. 三方 CSS、字体等资源可在 `globals.css` 中顶部通过 `@import` 引入或使用 next/font
-   2. preload, preconnect, dns-prefetch 通过 ReactDOM 的 preload、preconnect、dns-prefetch 方法引入
-   3. json-ld 可阅读 https://nextjs.org/docs/app/guides/json-ld
+响应: audio/wav
+```
 
-## UI 设计与组件规范 (UI & Styling Standards)
+### 保存音色
+```
+POST /api/voices/save
+Content-Type: multipart/form-data
 
-- 模板默认预装核心组件库 `shadcn/ui`，位于`src/components/ui/`目录下
-- Next.js 项目**必须默认**采用 shadcn/ui 组件、风格和规范，**除非用户指定用其他的组件和规范。**
+参数:
+- name: string (必填) - 音色名称
+- audio: file (必填) - 参考音频文件
+
+响应: { "success": true, "voice_id": "...", "name": "..." }
+```
+
+### 列表音色
+```
+GET /api/voices
+
+响应: { "voices": [{ "id": "...", "name": "...", "created": "..." }] }
+```
+
+### 删除音色
+```
+DELETE /api/voices/{voice_id}
+
+响应: { "success": true }
+```
+
+### 使用音色合成
+```
+POST /api/tts/synthesize
+Content-Type: multipart/form-data
+
+参数:
+- text: string (必填) - 要转换的文本
+- voice_id: string (必填) - 音色ID
+- speed: float (可选, 默认1.0) - 语速
+
+响应: audio/wav
+```
+
+## 模型下载
+
+### 使用 ModelScope SDK
+```bash
+cd /workspace/projects/backend
+python3 download_model.py
+```
+
+或使用命令行：
+```bash
+pip install modelscope
+modelscope download --model Qwen/Qwen3-TTS-12Hz-1.7B-Base
+```
+
+### 环境变量
+- `MODEL_DIR`: 模型存储目录 (默认: /tmp/models)
+- `VOICE_DIR`: 音色存储目录 (默认: /tmp/voices)
+- `DEMO_MODE`: 是否启用 Demo 模式 (默认: true)
+
+## 安装依赖
+
+### Python 依赖
+```bash
+cd /workspace/projects/backend
+pip install -r requirements.txt
+```
+
+### Node.js 依赖
+```bash
+cd /workspace/projects
+pnpm install
+```
+
+## 使用说明
+
+### 1. 声音克隆
+1. 点击上传区域，上传参考音频（5-30秒效果最佳）
+2. 在文本框中输入要转换的内容
+3. 调节语速（0.5x - 2.0x）
+4. 点击"生成克隆语音"按钮
+5. 等待生成完成，点击播放或下载
+
+### 2. 保存音色
+1. 上传参考音频后
+2. 点击"保存当前音色"
+3. 输入音色名称
+4. 确认保存
+
+### 3. 使用已保存的音色
+1. 在音色列表中点击某个音色
+2. 输入要转换的文本
+3. 点击生成
+
+## 注意事项
+
+1. **Demo 模式**: 当前默认启用 Demo 模式，会生成示例音频。如需真实克隆效果，需要安装完整的 torch 和模型依赖。
+
+2. **音频格式**: 支持 WAV、MP3、M4A 等常见音频格式，推荐使用 WAV 格式。
+
+3. **音频时长**: 参考音频建议 5-30 秒，时长过短可能影响克隆效果。
+
+4. **网络**: 首次使用需要从 ModelScope 下载模型（约 3.6GB）。
+
+## 故障排除
+
+### 模型加载失败
+```bash
+# 检查依赖
+pip install torch torchaudio
+
+# 重新下载模型
+python3 backend/download_model.py
+```
+
+### 前端无法连接后端
+- 检查后端服务是否运行: `curl http://localhost:5001/health`
+- 检查端口是否被占用: `ss -lptn | grep 5001`
+
+### 音频处理失败
+- 确保安装了 ffmpeg: `apt-get install ffmpeg`
+- 或确保安装了 scipy/soundfile/pydub
